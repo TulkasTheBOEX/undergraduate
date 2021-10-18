@@ -1,0 +1,791 @@
+#include<stdio.h>
+#include<graphics.h>
+#include<conio.h>
+
+//初始化了的空链表头
+struct gate* gate_head;
+struct input* input_head;
+struct output* output_head;
+struct line* line_head;
+int gate_width = 60;
+int gate_high = 100;
+int gate_line = 5;
+int inout_width = 50;
+int inout_high = 20;
+int inout_line = 5;
+ExMessage m;
+int test;
+
+struct gate
+{
+	struct gate* prev;
+	struct gate* next;
+	int type;//1:and
+	int in_num;
+	int* in_data;
+	int x;//坐标
+	int y;
+	int result;
+	int next_code;//输出连接的元器件对应编号
+	bool mark;
+	int cur_num;
+};
+struct input
+{
+	int nbit; //多少位
+	int* data;
+	struct input* prev;
+	struct input* next;
+	int x;
+	int y;
+	bool mark;
+};
+struct output
+{
+	int nbit; //多少位
+	int* data;
+	struct output* prev;
+	struct output* next;
+	int x;
+	int y;
+	bool mark;
+	struct line* l;
+};
+
+struct line
+{
+	int line_type;//1 2 3
+	//a to b
+	struct input* in_input1;
+	struct gate* out_gate1;
+	
+	struct gate* in_gate2;
+	struct output* out_output2;
+
+	struct gate* in_gate3;
+	struct gate* out_gate3;
+
+	struct line* prev;
+	struct line* next;
+
+	int gate_num;
+};
+/*
+struct wire
+{
+	int x1, y1, x2, y2;
+	struct wire* next;
+	struct wire* prev;
+	//int wire_typ2;
+};
+*/
+
+
+void initial();
+void move();
+//void create_andGate();
+struct gate* get_gate_tail();
+struct input* get_input_tail();
+struct output* get_output_tail();
+struct line* get_line_tail();
+void draw();
+//void gate_move();
+void joint();
+int select();
+void end();
+void cancel_s();
+
+//后期去做算法和程序优化 一个个全是遍历 有的因为不是一块编的 整体性较差
+int main()
+{
+	initial();
+	
+	move();
+
+	end();
+	return 0;
+}
+
+void initial()
+{
+	initgraph(600, 400);
+	
+	gate_head = (struct gate*)malloc(sizeof(struct gate));
+	gate_head->type = -1;
+	gate_head->prev = NULL;
+	gate_head->next = NULL;
+	gate_head->mark = false;
+
+	input_head = (struct input*)malloc(sizeof(struct input));
+	input_head->data = 0;
+	input_head->nbit = 0;
+	input_head->next = NULL;
+	input_head->prev = NULL;
+	input_head->mark = false;
+
+	output_head = (struct output*)malloc(sizeof(struct output));
+	output_head->data = 0;
+	output_head->nbit = 0;
+	output_head->next = NULL;
+	output_head->prev = NULL;
+	output_head->mark = false;
+
+	/*
+	wire_head = (struct wire*)malloc(sizeof(struct wire));
+	wire_head->next = NULL;
+	wire_head->prev = NULL;
+	wire_head->x1 = 0;
+	wire_head->x2 = 0;
+	wire_head->y1 = 0;
+	wire_head->y2 = 0;
+	*/
+	
+	line_head = (struct line*)malloc(sizeof(struct line));
+	line_head->line_type = 0;
+	line_head->in_gate2 = NULL;
+	line_head->in_gate3 = NULL;
+	line_head->in_input1 = NULL;
+	line_head->out_gate1 = NULL;
+	line_head->out_gate3 = NULL;
+	line_head->out_output2 = NULL;
+	line_head->prev = NULL;
+	line_head->next = NULL;
+}
+
+void move()
+{	
+	
+	while (1)
+	{
+		//加载菜单及菜单的数表交互
+		BeginBatchDraw();
+		rectangle(0, 0, 60, 30);
+		RECT r1 = { 0,0,60,30 };
+		drawtext(_T("与门"), &r1, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		rectangle(60, 0, 120, 30);
+		RECT r2 = { 60, 0, 120, 30 };
+		drawtext(_T("输入"), &r2, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		rectangle(120, 0, 180, 30);
+		RECT r3 = { 120, 0, 180, 30 };
+		drawtext(_T("输出"), &r3, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		rectangle(180, 0, 240, 30);
+		RECT r4 = { 180, 0, 240, 30 };
+		drawtext(_T("退出"), &r4, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		rectangle(240, 0, 300, 30);
+		RECT r5 = { 240, 0, 300, 30 };
+		drawtext(_T("连接"), &r5, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		rectangle(300, 0, 360, 30);
+		RECT r6 = { 300, 0, 360, 30 };
+		drawtext(_T("删除"), &r6, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		
+		rectangle(360, 0, 420, 30);
+		RECT r7 = { 360, 0, 420, 30 };
+		drawtext(_T("取消"), &r7, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		
+		m = getmessage(EM_MOUSE);
+		
+		//创建与门
+		if (m.x <= 60 && m.y <= 30 && m.lbutton == 1)//
+		{
+			struct gate* p;
+			struct gate* a;
+			p = (struct gate*)malloc(sizeof(struct gate));
+			p->type = 1;
+			p->x = 250;
+			p->y = 250;
+			p->mark = false;
+			a = get_gate_tail();
+			p->prev = a;
+			a->next = p;
+			p->next = NULL;
+			p->in_num = 2;
+			p->cur_num = 0;
+		}
+		//创建输入
+		if (60 <= m.x && m.x <= 120 && m.y <= 30 && m.lbutton == 1)
+		{
+			struct input* c = (struct input*)malloc(sizeof(struct input));
+			struct input* d = get_input_tail();
+			c->data = 0;
+			c->nbit = 1;
+			c->mark = false;
+			c->prev = d;
+			d->next = c;
+			c->next = NULL;
+			c->x = 100;
+			c->y = 100;
+		}
+		//创建输出
+		if (120 <= m.x && m.x<= 180 && m.y <= 30 && m.lbutton == 1)
+		{
+			struct output* e = (struct output*)malloc(sizeof(struct output));
+			struct output* f = get_output_tail();
+			e->data = 0;
+			e->nbit = 1;
+			e->mark = false;
+			e->prev = f;
+			f->next = e;
+			e->next = NULL;
+			e->x = 500;
+			e->y = 200;
+		}
+		//退出
+		if (180 <= m.x && m.x <= 240 && m.y <= 30 && m.lbutton == 1)
+		{
+			break;
+		}
+		//连接按钮
+		if (240 <= m.x && m.x <= 300 && m.y <= 30 && m.lbutton == 1)
+		{
+			//调用连接模块
+			joint();
+		}
+		//删除按钮  //把这个给我弄成函数调用！
+		if (300 <= m.x && m.x <= 360 && m.y <= 30 && m.lbutton == 1)
+		{
+			//遍历所有元件并删除有标记的
+			if (gate_head->next != NULL)
+			{
+				struct gate* g = gate_head->next;
+				while (g != NULL)
+				{
+					if (g->mark == true)
+					{
+						struct gate* g2 = g->prev;
+						if (g->next == NULL)
+						{
+							g->prev->next = NULL;
+							free(g);
+						}
+						else
+						{
+
+							g->prev->next = g->next;
+							g->next->prev = g2;
+							free(g);
+						}
+						g = g2;
+					}
+					g = g->next;
+				}
+			}
+
+			if (input_head->next != NULL)
+			{
+				struct input* i = input_head->next;
+				while (i != NULL)
+				{
+					if (i->mark == true)
+					{
+						struct input* i2 = i->prev;
+						if (i->next == NULL)
+						{
+							i->prev->next = NULL;
+							free(i);
+						}
+						else
+						{
+							i->prev->next = i->next;
+							i->next->prev = i2;
+							free(i);
+						}
+						i = i2;
+					}
+					i = i->next;
+				}
+			}
+
+			if (output_head->next != NULL)
+			{
+				struct output* o = output_head->next;
+				while (o != NULL)
+				{
+					if (o->mark == true)
+					{
+						struct output* o2 = o->prev;
+						if (o->next == NULL)
+						{
+							o->prev->next = NULL;
+							free(o);
+						}
+						else
+						{
+							o->prev->next = o->next;
+							o->next->prev = o2;
+							free(o);
+						}
+						o = o2;
+					}
+					o = o->next;
+				}
+			}
+		}
+		//加一个取消选择的按钮
+		if (360 <= m.x && m.x <= 420 && m.y <= 30 && m.lbutton == 1)
+		{
+			cancel_s();
+		}
+
+
+		//test:选中输出与与门并连接的 模块
+		//joint();
+
+		select();
+		//gate_move();//用于移动门元件的模块
+		draw();		//用于绘制门元件的模块
+		FlushBatchDraw();
+		cleardevice();
+	}
+}
+
+//void create_andGate()
+
+struct gate* get_gate_tail()
+{
+	struct gate* tail = gate_head;
+	while (tail->next != NULL)
+	{
+		tail = tail->next;
+	}
+	return tail;
+}
+
+struct input* get_input_tail()
+{
+	struct input* tail = input_head;
+	while (tail->next != NULL)
+	{
+		tail = tail->next;
+	}
+	return tail;
+}
+
+struct output* get_output_tail()
+{
+	struct output* tail = output_head;
+	while (tail->next != NULL)
+	{
+		tail = tail->next;
+	}
+	return tail;
+}
+
+void draw()
+{
+	//如果被选中 要有所区分
+	//绘制门元件
+	if (gate_head->next != NULL)
+	{
+		struct gate* temp = gate_head->next;
+		while (temp != NULL)
+		{
+			rectangle(temp->x, temp->y, temp->x + gate_width, temp->y + gate_high);
+			RECT r = { temp->x, temp->y, temp->x + gate_width, temp->y + gate_high };
+
+			if (temp->mark == false)
+			{
+				drawtext(_T("&&"), &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+			else
+			{
+				drawtext(_T("!&&!"), &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+			//输入指示短线
+			switch (temp->in_num)
+			{
+			case 1:line(temp->x - gate_line, temp->y + gate_high / 2, temp->x, temp->y + gate_high / 2);
+				break;
+			case 2:line(temp->x - gate_line, temp->y + gate_high / 3, temp->x, temp->y + gate_high / 3);
+				line(temp->x - gate_line, temp->y + gate_high / 3 * 2, temp->x, temp->y + gate_high / 3 * 2);
+				break;
+			case 3:line(temp->x - gate_line, temp->y + gate_high / 4, temp->x, temp->y + gate_high / 4);
+				line(temp->x - gate_line, temp->y + gate_high / 2, temp->x, temp->y + gate_high / 2);
+				line(temp->x - gate_line, temp->y + gate_high / 4 * 3, temp->x, temp->y + gate_high / 4 * 3);
+				break;
+			}
+			//输出指示短线
+			line(temp->x + gate_width, temp->y + gate_high / 2, temp->x + gate_width + gate_line, temp->y + gate_high / 2);
+			temp = temp->next;
+		}
+	}
+
+	//绘制输入元件
+	if (input_head->next != NULL)
+	{
+		struct input* in = input_head->next;
+		while (in != NULL)
+		{
+			rectangle(in->x, in->y, in->x + inout_width, in->y + inout_high);
+			RECT i = { in->x, in->y, in->x + inout_width, in->y + inout_high };
+			if (in->mark == false)
+			{
+				drawtext(_T("in"), &i, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+			else
+			{
+				drawtext(_T("!in!"), &i, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+
+			line(in->x + inout_width, in->y + inout_high / 2, in->x + inout_width + inout_line, in->y + inout_high / 2);
+			in = in->next;
+		}
+	}
+
+	//绘制输入元件
+	if (output_head->next != NULL)
+	{
+		struct output* out = output_head->next;
+		while (out != NULL)
+		{
+			rectangle(out->x, out->y, out->x + inout_width, out->y + inout_high);
+			RECT i = { out->x, out->y, out->x + inout_width, out->y + inout_high };
+			if (out->mark == false)
+			{
+				drawtext(_T("out"), &i, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+			else
+			{
+				drawtext(_T("!out!"), &i, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+			line(out->x - inout_line, out->y + inout_high / 2, out->x, out->y + inout_high / 2);
+			out = out->next;
+		}
+	}
+
+	//绘制线
+	/*
+	if (wire_head->next != NULL)
+	{
+		struct wire* w = wire_head->next;
+		while (w != NULL)
+		{
+			line(w->x1, w->y1, w->x2, w->y2);
+			w = w->next;
+		}
+
+	}
+	*/
+	if (line_head->next != NULL)
+	{
+		struct line* l = line_head->next;
+		while (l != NULL)
+		{
+			if (l->line_type == 1)
+			{
+				struct input* i = l->in_input1;
+				struct gate* g = l->out_gate1;
+				int x1 = i->x + inout_width + gate_line;
+				int y1 = i->y + inout_high / 2;
+				int x2 = g->x - gate_line;
+				int y2 = 0;
+				//目前暂时只能处理两输入门 如果要分类讨论输入个数 则要再嵌套一层if else 或 switch
+				//目前由于没有“移动元件”模块 所以无法同时放置两个输入 因而只能验证gate_num=1的情况
+				//后续要补上测试
+				if (l->gate_num == 1)
+				{
+					y2 = g->y + gate_high / 3;
+				}
+				else if (l->gate_num == 2)
+				{
+					y2 = g->y + gate_high / 3 * 2;
+				}
+				line(x1, y1, x2, y2);
+			}
+			else if (l->line_type == 2)
+			{
+				struct gate* g1 = l->in_gate2;
+				struct output* o1 = l->out_output2;
+				int x1 = g1->x + gate_width + gate_line;
+				int y1 = g1->y + gate_high / 2;
+				int x2 = o1->x - gate_line;
+				int y2 = o1->y + inout_high / 2;
+				line(x1, y1, x2, y2);//先是简单的直线 等后面功能完善再改 本身很容易
+			}
+			else if (l->line_type == 3)
+			{
+
+			}
+
+
+
+			l = l->next;
+		}
+	}
+	
+	//test
+	
+	//if (test == 1) {line(0, 0, 100, 100);}
+}
+/*void gate_move()
+	{
+
+		char ch;
+		struct gate* temp = gate_head;
+		MOUSEMSG m;
+		while (temp != NULL)
+		{
+			//移动门元件
+
+			while (temp != NULL)
+			{
+				//移动门元件
+				m = GetMouseMsg();
+				if (m.mkRButton && temp->x <= m.x && m.x <= temp->x + gate_width && temp->y <= m.y && m.y <= temp->y + gate_high)
+				{
+
+				}
+				temp = temp->next;
+			}
+		}
+
+
+	}*/
+
+void joint()
+{
+	//想想找出来的指针怎么传出去 （也可以就在joint函数里面创建连线对象 然后draw函数照着画就行）
+	struct gate* g = gate_head->next;
+	struct input* i = input_head->next;
+	struct output* o = output_head->next;
+	int flag = 0;
+
+	//用于存放指向被选中元件的指针
+	struct gate* g1 = NULL;
+	struct gate* g2 = NULL;
+	struct input* i1 = NULL;
+	struct output* o1 = NULL;
+
+	while (g != NULL)
+	{
+		if (g->mark == true)
+		{
+			flag++;
+			if (g1 == NULL)
+			{
+				g1 = g;
+			}
+			else
+			{
+				g2=g;
+				break;
+			}
+		}
+		g = g->next;
+	}
+
+	while (i != NULL)
+	{
+		if (i->mark == true)
+		{
+			flag++;
+			i1 = i;
+		}
+		i = i->next;
+	}
+
+	while (o != NULL)
+	{
+		if (o->mark == true)
+		{
+			flag++;
+			o1 = o;
+		}
+		o = o->next;
+	}
+	//无论是哪种类型，合法或非法（如选择数目过多或类型不匹配） 点击完连接后必须全部取消选择
+	//无非是合法的操作会建立连线，不合法的不会建立罢了
+	
+	if(flag == 2)
+	{
+		//判断连接类型并创建连线对象
+		if (i1 != NULL && g1 != NULL)
+		{	
+			//!不仅要知道连线的xy坐标，还要存它前驱后继的指针！
+			//可能要涉及结构体的变动
+			//g1->in_num
+
+			if (g1->cur_num < g1->in_num)
+			{
+				//涉及要判断逻辑门输入有几个 当前已经有了几个的问题
+				struct line* l = (struct line*)malloc(sizeof(struct line));
+				struct line* p = (struct line*)malloc(sizeof(struct line));
+				p = get_line_tail();
+				l->line_type = 1;
+				p->next = l;
+				l->prev = p;
+				l->next = NULL;
+				l->in_input1 = i1;
+				l->out_gate1 = g1;
+				l->in_gate2 = NULL;
+				l->in_gate3 = NULL;
+				l->out_gate3 = NULL;
+				l->out_output2 = NULL;
+				l->gate_num = g1->cur_num + 1;
+				g1->cur_num++;
+			}
+			else
+			{
+				//给个提示：连接建立非法
+			}
+		}
+		else if (g1 != NULL && o1 != NULL)
+		{
+			struct line* l = (struct line*)malloc(sizeof(struct line));
+			struct line* p = (struct line*)malloc(sizeof(struct line));
+			p = get_line_tail();
+			l->line_type = 2;
+			p->next = l;
+			l->prev = p;
+			l->next = NULL;
+			l->in_gate2 = g1;
+			l->out_output2 = o1;
+			l->in_gate3 = NULL;
+			l->in_input1 = NULL;
+			l->out_gate1 = NULL;
+			l->out_gate3 = NULL;
+		}
+		else if (g2 != NULL)
+		{
+			
+		}
+		
+	}
+	
+	cancel_s();
+}
+
+int select()
+{
+	//门、输入、输出 逐个遍历 查看是否被选中 如果选中了 将被选中的元件标记为true 并等待菜单模块对其进行操作 如连接等
+	m = getmessage();
+	if (m.lbutton == 1)	//按下
+	{
+		//遍历是否有有效目标被选中
+		if (gate_head->next != NULL)
+		{
+			struct gate* g = gate_head->next;
+			while (g != NULL)
+			{
+				if (g->x <= m.x && m.x <= g->x + gate_width && g->y <= m.y && m.y <= g->y + gate_high)
+				{
+					if (g->mark == true)
+					{
+						g->mark = false;
+					}
+					else
+					{
+						g->mark = true;
+					}
+					return 1;
+				}
+				g = g->next;
+			}
+		}
+		if (input_head->next != NULL)
+		{
+			struct input* i = input_head->next;
+			while (i != NULL)
+			{
+				if (i->x <= m.x && m.x <= i->x + inout_width && i->y <= m.y && m.y <= i->y + inout_high)
+				{
+					if (i->mark == true)
+					{
+						i->mark = false;
+					}
+					else
+					{
+						i->mark = true;
+					}
+					return 1;
+				}
+				i = i->next;
+			}
+		}
+		if (output_head->next != NULL)
+		{
+			struct output* o = output_head->next;
+			while (o != NULL)
+			{
+				if (o->x <= m.x && m.x <= o->x + inout_width && o->y <= m.y && m.y <= o->y + inout_high)
+				{
+					if (o->mark == true) o->mark = false;
+					else if (o->mark == false) o->mark = true;
+					return 1;
+				}
+				o = o->next;
+			}
+		}
+	}
+}
+void end()
+{
+	struct gate* g1 = gate_head;
+	struct gate* g2 = g1->next;
+	while (g1 != NULL)
+	{
+		g2 = g1->next;
+		free(g1);
+		g1 = g2;
+	}
+
+	struct input* i1 = input_head;
+	struct input* i2 = i1->next;
+	while (i1 != NULL)
+	{
+		i2 = i1->next;
+		free(i1);
+		i1 = i2;
+	}
+
+	struct output* o1 = output_head;
+	struct output* o2 = o1->next;
+	while (o1 != NULL)
+	{
+		o2 = o1->next;
+		free(o1);
+		o1 = o2;
+	}
+}
+
+//该函数反正有遍历作用，后续可以修改，将涉及遍历的工作全部交给它做，只不过根据传入参数的不同
+//实现不同的功能罢了：例如遍历并取消选择 遍历并查看是否有模块被选择 
+//但合在一起的时候要考虑代码复杂性 不要为合而合 而且有些模块只有触发了有些条件才会执行 并不会添加多大的时间开销
+//主要说的是一直要遍历的 就合在一起
+void cancel_s()
+{
+	//遍历并取消选择
+	struct gate* g = gate_head->next;
+	struct input* i = input_head->next;
+	struct output* o = output_head->next;
+	
+	while (g != NULL)
+	{
+		g->mark = false;
+		g = g->next;
+	}
+
+	while (i != NULL)
+	{
+		i->mark = false;
+		i = i->next;
+	}
+	while (o != NULL)
+	{
+		o->mark = false;
+		o = o->next;
+	}
+}
+struct line* get_line_tail()
+{
+	struct line* l = line_head;
+	while (l->next != NULL)
+	{
+		l = l->next;
+	}
+	return l;
+}
